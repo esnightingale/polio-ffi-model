@@ -1,0 +1,379 @@
+---
+title: "Simulating sampling"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Simulating probability of sampling during shedding
+
+Assumptions:
+- One individual shedding >= 1 day this month
+- Average 16 days shedding
+- 30 days in 1 month
+- Equal probability of sampling on any given day 1-30
+
+```{r setup}
+
+library(tidyverse)
+library(magrittr)
+library(intervals)
+library(patchwork)
+
+# Fix default ggsave background
+ggsave <- function(..., bg = 'white') ggplot2::ggsave(..., bg = bg)
+theme_set(theme_minimal())
+
+outdir <- here::here("results","sampling_probabilities")
+
+```
+
+## Shedding period
+
+Average duration of infectious shedding of 16 days in an assumed highly vaccinated population.
+
+Modelling study with Isreali data estimated 29 days, assuming population with 0-3 doses of OPV, but only 3 days of high/infectious shedding: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9114981/ 
+
+```{r define_shedding}
+
+Iter = 1000
+
+# Average days of shedding
+shed_avg = 16
+
+# Iterations of shed duration
+shed_days = rpois(Iter*2, shed_avg)
+
+# Define period of days on which shedding could start in order to coincide with this month (excluding 0)
+# per = -(max(shed_days)):30
+# per = per[per != 0]
+
+# Random start date of shedding
+# shed_start = sample(-16:30, Iter, replace = T)
+shed_start = sapply(shed_days, function(x) sample(-60:30, 1, replace = T))
+shed_end = shed_start + shed_days
+
+shed_start %>% as.factor() %>% table() %>% barplot()
+
+# png(here::here(outdir, "sim1_shed_start.png"), height = 400, width = 600)
+# shed_start %>% as.factor() %>% table() %>% barplot()
+# dev.off()
+
+# Define shedding intervals
+sims <- data.frame(shed_start, shed_end)
+
+# Keep only draws which intersect with month t=1:30
+int_intersect <- function(x){
+  tmp <- NA
+  for (t in 1:30){
+    tmp[t] <- between(t, x[1], x[2])
+  }
+  if(any(tmp == T)){
+    return(TRUE)
+  }else{
+    return(FALSE)
+  }
+}
+
+caught <- apply(sims, 1, int_intersect)
+sims <- sims[caught,]
+
+# Shed start given intersection with this month
+sims$shed_start %>% as.factor() %>% table() %>% barplot()
+# 
+# png(here::here(outdir, "sim1_shed_start_cond.png"), height = 400, width = 600)
+# sims$shed_start %>% as.factor() %>% table() %>% barplot()
+# dev.off()
+
+```
+
+-> Approximately uniform for start day of shedding
+-> Lower end tails off when conditioning on shedding intersecting with this month
+
+## Sampling
+
+```{r define_sampling}
+
+# Sample taken any day from 1:30
+sims$sample_taken = sample(1:30, nrow(sims), replace = T)
+
+hist(sims$sample_taken)
+
+```
+
+## Shedding catchment
+
+```{r simulate_shedding_catchment}
+
+# Sample captures shedding if day of sample is during shedding period
+sims %<>% 
+  rowwise() %>% 
+  mutate(caught = between(sample_taken, shed_start, shed_end)) %>% 
+  ungroup() %>% 
+  arrange(caught) %>% 
+  mutate(i = 1:nrow(sims), tmp = 1)
+
+summary(sims)
+
+```
+
+```{r summary_sims1}
+
+mean(sims$caught)
+# 0.36
+
+sims_samp <- slice_sample(sims,n = 100)
+
+ggplot()  +
+  geom_hline(aes(yintercept = c(1, 30)))+
+  geom_linerange(data = sims_samp,
+                 aes(ymin = shed_start, ymax = shed_end, x = i),
+                 col = "grey") +
+  geom_point(data = sims_samp,
+             aes(x = i, y = sample_taken, col = caught)) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(1,30), labels = c(1,30)) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  labs(x = NULL, y = NULL, col = "Caught") -> p1
+
+ggplot()  +
+  geom_hline(aes(yintercept = c(1, 30)))+
+  geom_linerange(data = sims_samp, 
+                 aes(ymin = shed_start, ymax = shed_end, x = i, col = caught)) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(1,30), labels = c(1,30)) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  labs(x = NULL, y = NULL, col = "Caught") -> p2
+
+p1 + p2
+ggsave(here::here(outdir, "sim1_shedding_sampling.png"), width = 12, height = 6)
+
+```
+
+## Simulate for different sampling frequencies
+
+```{r define_fcn}
+
+get_sims <- function(n_samp = 1, Iter = 1000){
+  sims2 = data.frame(d = NA_integer_, 
+                     start = NA_integer_, 
+                     end = NA_integer_, 
+                     sample_taken = NA_character_, 
+                     caught = NA_character_)
+  for (i in 1:Iter){
+    
+    # Draw shedding duration
+    d = rpois(1, shed_avg)
+    
+    # per = -d:30
+    # start = sample(per, 1)
+    
+    # Draw start day, conditional on start:end intersecting with 1:30
+    start <- end <- -99
+    while(!int_intersect(c(start, end))){
+        start = sample(-60:30, 1)
+        end = start + d
+    }
+    
+    # Draw n_samp sampling days 
+    samp = sample(1:30, n_samp)
+    
+    # Flag where sampling days occur during shedding
+    caught = any(between(samp,start,end))
+    
+    # Output
+    sims2[i,] = data.frame(d = d, 
+                           start = start, end = end,
+                           sample_taken = paste0(samp, collapse = ","),
+                           caught = (caught == TRUE))
+  }
+  
+  return(sims2)
+  
+}
+
+sims.list <- lapply(1:4, get_sims, Iter = Iter)
+
+```
+
+```{r plot_sims2}
+
+sims_samp <- slice_sample(sims.list[[1]], n = 100) %>%
+  arrange(caught) %>% 
+  mutate(sample_taken = as.numeric(sample_taken),
+         i = 1:100, tmp = 1)
+
+ggplot()  +
+  geom_hline(aes(yintercept = c(1, 30)))+
+  geom_linerange(data = sims_samp,
+                 aes(ymin = start, ymax = end, x = i),
+                 col = "grey") +
+  geom_point(data = sims_samp,
+             aes(x = i, y = sample_taken, col = caught)) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(1,30), labels = c(1,30)) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = c(0.1,0.9)) +
+  labs(x = NULL, y = NULL, col = "Caught") -> p1
+
+ggplot()  +
+  geom_hline(aes(yintercept = c(1, 30)))+
+  geom_linerange(data = sims_samp, 
+                 aes(ymin = start, ymax = end, x = i, col = caught)) +
+  coord_flip() +
+  scale_y_continuous(breaks = c(1,30), labels = c(1,30)) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  labs(x = NULL, y = NULL, col = "Caught") -> p2
+
+p1 + p2
+ggsave(here::here(outdir, "sim_shedding_sampling.png"), width = 12, height = 6)
+
+```
+
+```{r sum_sims_list}
+
+data.frame(n = 1:4,
+           p = sapply(sims.list, function(x) mean(x$caught == TRUE))) -> p_catch_byn
+
+p_catch_byn
+# n    p
+# 1 0.36
+# 2 0.57
+# 3 0.66
+# 4 0.75
+
+ggplot(p_catch_byn, aes(n, p)) +
+  geom_line() +
+  labs(x = "Samples per 30 days", y = "Probability",
+       title = "Simulated probability of catching shedding of one infectious individual",
+       subtitle = paste0("Mean across ",Iter," simulations"))
+
+```
+
+## Simulate sampling distribution of this probability
+
+```{r sim_samp_dist}
+
+get_sims_rep <- function(rep, n_samp = 1, Iter = 1000){
+  out <- lapply(1:rep, function(x) get_sims(n_samp = n_samp, Iter = Iter))
+  # Return just the proportion of sims in which shedding coincides with sampling
+  p <- sapply(out, function(x) mean(x$caught == TRUE))
+  return(p)
+}
+
+sims_rep_1 <- get_sims_rep(rep = 100, n_samp = 1, Iter = 1000)
+hist(sims_rep_1)
+
+png(here::here(outdir, "sim_sampdist_freq1.png"), height = 400, width = 600)
+hist(sims_rep_1)
+dev.off()
+
+```
+
+```{r sim_samp_dist_byn}
+
+freq <- 1:30
+pb <- progress::progress_bar$new(format = "[:bar] :current/:total (:percent)", 
+                                   total = length(freq))
+sims_rep <- lapply(freq, function(n) {
+                            pb$tick()
+                            get_sims_rep(rep = 1000, 
+                                         n_samp = n, 
+                                         Iter = 100)
+                          })
+
+saveRDS(sims_rep, here::here(outdir,"sims.rds"))
+
+```
+
+```{r sum_samp_dist_byn}
+
+sims_rep %>% 
+  setNames(freq) %>% 
+  bind_cols() %>% 
+  pivot_longer(everything(), names_to = "SampleFreq", values_to = "p") %>% 
+  mutate(SampleFreq = factor(SampleFreq, levels = freq)) -> sum_sims
+
+sum_sims %>% 
+  ggplot(aes(x = p, fill = SampleFreq)) +
+  geom_histogram(position = "identity", alpha = 0.5) +
+  labs(x = "Proportion of sims in which shedding coincides with sampling",
+       y = "Frequency",
+       fill = "Samples taken")
+ggsave(here::here(outdir, "sim_p_catch_hist.png"), height = 5, width = 8)
+
+sum_sims %>% 
+  ggplot(aes(x = as.factor(SampleFreq), y = p)) +
+  geom_boxplot() +
+  labs(x = "Samples taken in 30 days", y = "Estimate",
+       # title = "Estimated probabilty of sampling coinciding with shedding",
+       # subtitle = "Assuming one infected individual shedding for >= 1 day",
+       caption = "Summary over 1000 replicates") -> sim_p_catch_box
+
+sim_p_catch_box
+ggsave(here::here(outdir, "sim_p_catch_box.png"), height = 5, width = 8)
+
+p1  + sim_p_catch_box + plot_layout(widths = c(1,2))
+ggsave(here::here(outdir, "sim_sampling_prob.png"), width = 12, height = 5)
+
+```
+
+```{r output_samp_dist_byn}
+
+sum_sims %>% 
+  group_by(SampleFreq) %>% 
+  summarise(EstMean = mean(p),
+            EstLwr = quantile(p, 0.025),
+            EstUpr = quantile(p, 0.975)) %>% 
+  ungroup() -> tab_p
+
+write_csv(tab_p, here::here("inputs", "ES_envsamp_vals.csv"))
+
+ggplot(tab_p, aes(x = SampleFreq,
+                  y = EstMean, 
+                  ymin = EstLwr, ymax = EstUpr,
+                  group = 1)) +
+  geom_ribbon(alpha = 0.5, fill = "steelblue") +
+  geom_line(col = "steelblue") +
+  labs(x = "Samples taken in 30 days", y = "Estimate",
+       title = "Estimated probabilty of sampling coinciding with shedding",
+       subtitle = "Assuming one infected individual shedding for >= 1 day",
+       caption = "95% quantile interval over 1000 replicates")
+ggsave(here::here(outdir, "sim_p_catch.png"), height = 5, width = 8)
+
+```
+
+```{r count_days_shedding}
+
+count_days <- data.frame(t = 1:30,
+                         count = NA)
+for (t in 1:30){
+  sum(apply(select(sims.list[[1]],start,end),1, 
+            function(x) between(t,x[1],x[2]))) -> count_days$count[t]
+}
+count_days %>% 
+  mutate(dens = count/sum(count)) %>% 
+  ggplot(aes(x = t, y = dens)) +
+  geom_col()
+
+```
+Roughly uniform density of shedding for every day of the month
+
+for each day in the month t = 1:30 what is the probability that:
+ + the individual is shedding
+ + a sample is taken?
+
+Given an individual sheds for 16 days, there are 45 periods a person can be
+shedding during a month of 30 days
+There are 16 ways an individual is shedding on any given day 1:30
+=> probability person shedding on any given day in a month is 16/45(??)
+
+<!-- freq = 1 # frequency per month -->
+<!-- p_detect = data.frame(t = 1:30, -->
+<!--                    p_shed = 16/45, -->
+<!--                    p_sample = freq*1/30) %>% -->
+<!--  mutate(p_shed_sample = p_shed*p_sample) -->
