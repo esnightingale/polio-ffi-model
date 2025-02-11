@@ -61,14 +61,14 @@ source(here("R/utils/estimate_elimination_fcn.R"))
 
 # Single run
 prior = c(30,30)
-out_ffi_tv <- elim_est_tv(sens_all,
+out_ffi_tv <- elim_est(sens_all,
                        intro = T,
                        future = future, M = M,
                        prior_parms = prior)
 
 # Compare time-varying vs static
 compare_tv <- lapply(c(T,F),
-                     function(tv){elim_est_tv(sens_all,
+                     function(tv){elim_est(sens_all,
                                               future = future, M = M,
                                               tv = tv)})
 
@@ -79,7 +79,7 @@ prior_opts <- list(c(10,30),
                    # c(10,5),
                    c(30,10))
 compare_priors <- lapply(prior_opts,
-                         function(prior){elim_est_tv(sens_all,
+                         function(prior){elim_est(sens_all,
                                                      future = future, M = M,
                                                      prior_parms = prior)})
 
@@ -88,7 +88,7 @@ intro_opts <- list("Low (1/1000)" = c(lower = 1/5000, best = 1/1000, upper = 1/5
                    "Mid (1/500)" = c(lower = 1/1000, best = 1/500, upper = 1/100, p = 0.95),
                    "High (1/100)" = c(lower = 1/1000, best = 1/100, upper = 1/10, p = 0.95))
 compare_intro <- lapply(intro_opts,
-                         function(intro){elim_est_tv(sens_all,
+                         function(intro){elim_est(sens_all,
                                                      future = future, M = M,
                                                      prior_parms = prior,
                                                      intro_parms = intro)})

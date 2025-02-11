@@ -44,6 +44,11 @@ run_FFI <- function(tdy,
   # Set seed
   set.seed(seed)
 
+  # Check M
+  if(est_FFI & is.null(M)){
+    return("Please provide a value for M")
+  }
+
   # -----------------------------------------------------------------------------#
   # CALCULATE RISK
 
@@ -122,6 +127,13 @@ run_FFI <- function(tdy,
 
   # Estimate FFI based on calculated sensitivities for **current** month
   # For M **prospective** years of zero positives
+  #
+  # Note: It's probably unnecessary repetition to calculate an M-year-ahead
+  # FFI trajectory for each month's estimated sensitivity. Usually want to set
+  # est_FFI = F and instead calculate a single trajectory over a retrospective
+  # period with variable sensitivity via 05_estimate_elimination_trajectory.R.
+  # This can then be projected into the future based on last 3m average
+  # sensitivities by setting future = T and providing M.
 
   if(est_FFI == T){
 
@@ -131,13 +143,15 @@ run_FFI <- function(tdy,
 
     print(paste("FFI calculated assuming zero positives from",ffi_from, "to",ffi_to))
 
-    elim_est_ahead(out_sens = out_sens,
-                   tdy = ffi_from,
-                   M = M,
-                   elim_criterion = elim_criterion) -> out_elim
+    elim_est(out_sens = out_sens,
+             tdy = ffi_from,
+             future = T,
+             M = M,
+             elim_criterion = elim_criterion) -> out_elim
     out <- list(risk = out_risk,
                 sens = out_sens,
                 FFI = out_elim)
+
   }else{
     out <- list(risk = out_risk,
                 sens = out_sens)

@@ -199,23 +199,6 @@ data_sub <- data %>%
 
 tdy <- ymd(cc$end)
 
-# Define a theme
-map_theme = list(
-  theme_void(),  # Empty theme without axis lines and texts
-  theme(
-    panel.background = element_rect(fill = "transparent", colour = NA),
-    plot.background = element_rect(fill = "transparent", colour = NA),
-    legend.background = element_rect(fill = "transparent", colour = NA),
-    legend.box.background = element_rect(fill = "transparent", colour = NA)
-  ),
-  geom_sf(data = shape1,
-          colour='black',size =0.75,fill = '#00000000',
-          inherit.aes = FALSE),
-  geom_sf(data = shape0,
-          colour='black',size =2,fill = '#00000000',
-          inherit.aes = FALSE)
-)
-
 # Define plot area/dimensions
 bbox = data_sub %>%
   left_join(shape2,by = 'guid') %>%
@@ -236,6 +219,7 @@ ggsave(here(outdir,
             paste0(cc_name,'_province_names.png')),
        width = 1+aspect_ratio*base_width,height=1+base_width,units='in',dpi=600)
 
+## Clinical cases
 ggplot() +
   geom_point(aes(x=x,y=y),
              data = afp %>% filter(flag,
@@ -254,7 +238,7 @@ ggsave(here(outdir,
        map_cases,
        width = 5, height = 4)
 
-## Case/ES map - past 12m
+## Cases/ES positives - past 12m
 ggplot() +
   geom_sf(data = shape2, fill = '#00000000')+
   map_theme +
@@ -271,7 +255,7 @@ ggsave(here(outdir,
                    'case_6mth.png', sep = "_")),
        width = 1+aspect_ratio*base_width,height=1+base_width,units='in',dpi=600)
 
-## With negative ES
+## With ES negatives
 ggplot() +
   geom_sf(data = shape2, fill = '#00000000')+
   map_theme +
@@ -289,7 +273,7 @@ ggsave(here(outdir,
                    'case_6mth_wneg.png', sep = "_")),
        width = 1+aspect_ratio*base_width,height=1+base_width,units='in',dpi=600)
 
-## Immunity
+## Modelled immunity (proportion)
 data_sub %>%
   mutate(period = round(period, 3)) %>%
   # Immunity one m prior to period of interest
