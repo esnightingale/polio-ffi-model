@@ -1,6 +1,6 @@
 # Sub-national estimation of surveillance sensitivity to inform declaration of disease elimination
 
-This repository provides code to conduct an analysis of polio surveillance data, assessing risk, sensitivity of poliovirus detection and the probability of elimination from a bounded region. It builds upon principles described in [O'Reilly et al 2020](https://pubmed.ncbi.nlm.nih.gov/32398193/) and the data cleaning and immunity modelling in [Voorman et al 2023](https://pubmed.ncbi.nlm.nih.gov/34483024/). The analysis approach is described in full in [Nightingale et al]() *(URL to be added)*, along with the results of a validation against the evaluation of wild poliovirus elimination in Nigeria between 2014 and 2020.
+This repository provides code to conduct an analysis of polio surveillance data, assessing risk, sensitivity of poliovirus detection and the probability of elimination from a bounded region. It builds upon principles described in [O'Reilly et al 2020](https://pubmed.ncbi.nlm.nih.gov/32398193/) and the data cleaning and immunity modelling in [Voorman et al 2023](https://pubmed.ncbi.nlm.nih.gov/34483024/). The analysis approach is described in full in [Nightingale et al](https://www.medrxiv.org/content/10.1101/2025.01.30.25321401v1), along with the results of a validation against the evaluation of wild poliovirus elimination in Nigeria between 2014 and 2020.
 
 ## Data
 
